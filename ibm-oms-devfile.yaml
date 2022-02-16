@@ -1,0 +1,137 @@
+
+apiVersion: 1.0.0
+metadata:
+  name: oms-dev-
+attributes:
+  persistVolumes: 'false'
+projects:
+  - name: oms-extension
+    source:
+      location: 'https://github.com/priyajithc/oms-extension-sample.git'
+      type: git
+components:
+  - id: redhat/java/latest
+    preferences:
+      java.server.launchMode: Standard
+    type: chePlugin
+  - mountSources: true
+    memoryLimit: 1024Mi
+    type: dockerimage
+    volumes:
+      - name: gradle
+        containerPath: /home/gradle/.gradle
+    image: 'quay.io/eclipse/che-java11-gradle:7.21.1'
+    alias: oms-extenstion
+    env:
+      - value: /home/gradle/.gradle
+        name: GRADLE_USER_HOME
+      - value: '-XX:MaxRAMPercentage=50 -XX:+UseParallelGC -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=20 -XX:GCTimeRatio=4 -XX:AdaptiveSizePolicyWeight=90 -Dsun.zip.disableMemoryMapping=true -Xms20m -Djava.security.egd=file:/dev/./urandom'
+        name: JAVA_OPTS
+      - value: '-XX:MaxRAMPercentage=50 -XX:+UseParallelGC -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=20 -XX:GCTimeRatio=4 -XX:AdaptiveSizePolicyWeight=90 -Dsun.zip.disableMemoryMapping=true -Xms20m -Djava.security.egd=file:/dev/./urandom'
+        name: JAVA_TOOL_OPTIONS
+      - value: /home/gradle
+        name: HOME
+  - mountSources: true
+    endpoints:
+      - attributes:
+          path: /
+        name: Store_Dev_Server
+        port: 4500
+    memoryLimit: 4096Mi
+    type: dockerimage
+    image: '<<oms-base-image>>'
+    alias: oms-runtime
+  - mountSources: true
+    endpoints:
+      - attributes:
+          path: /smcfs
+        name: Sterling_Application_Manager
+        port: 9080
+      - attributes:
+          path: /sbc
+        name: Sterling_Business_Center
+        port: 9080
+      - attributes:
+          path: /isccs
+        name: Sterling_Call_Center
+        port: 9080
+      - attributes:
+          path: /wsc
+        name: Sterling_Store
+        port: 9080
+      - attributes:
+          path: /isf
+        name: Sterling_Store2
+        port: 9080
+      - attributes:
+          path: /smcfs/yfshttpapi/ibmapitester.jsp
+        name: API_Tester
+        port: 9080
+    memoryLimit: 3072Mi
+    type: dockerimage
+    image: '<<oms-liberty-image>>'
+    alias: oms-appserver
+commands:
+  - name: Build Java Extensions
+    actions:
+      - workdir: '${CHE_PROJECTS_ROOT}/oms-extension-sample'
+        type: exec
+        command: gradle build
+        component: oms-extenstion
+  - name: Build Resource JAR
+    actions:
+      - workdir: '${OMS_RUNTIME}/bin'
+        type: exec
+        command: './setupfiles.sh && ./deployer.sh -t resourcejar'
+        component: oms-runtime
+  - name: Build Entity JAR
+    actions:
+      - workdir: '${OMS_RUNTIME}/bin'
+        type: exec
+        command: './setupfiles.sh && ./dbverify.sh &&  ./deployer.sh -t entitydeployer'
+        component: oms-runtime
+  - name: Build EAR
+    actions:
+      - workdir: '${OMS_RUNTIME}'
+        type: exec
+        command: 'read -p ''WAR Files [smcfs,sbc,sma]: '' warFiles; warFiles=${warFiles:-''smcfs,sbc,sma''}; read -p ''Dev Mode [false]: '' devMode; devMode=${devMode:-''false''}; read -p ''Additional Build Arguments: '' addnArgs; cd bin && ./setupfiles.sh && ./deployer.sh -t resourcejargen && ./buildear.sh -Ddevmode=$devMode -Dappserver=websphere -Dapitester=true -Dwebsphere-profile=liberty -Dwarfiles=$warFiles -Dearfile=smcfs.ear -Dnowebservice=true -Dnoejb=true $addnArgs'
+        component: oms-runtime
+  - name: Start Agent/Integration Server
+    actions:
+      - workdir: '${OMS_RUNTIME}'
+        type: exec
+        command: 'read -p ''Server Name: '' name; read -p ''JVM Options: '' jvmOptions; echo "Starting server $name $jvmOptions"'
+        component: oms-runtime
+  - name: Stop Agent/Integration Server
+    actions:
+      - workdir: '${OMS_RUNTIME}'
+        type: exec
+        command: 'read -p ''Server Name: '' name; echo "Stopping server $name"'
+        component: oms-runtime
+  - name: Deploy EAR
+    actions:
+      - workdir: '${CHE_PROJECTS_ROOT}'
+        type: exec
+        command: rm -rf /config/dropins/*.ear && cp runtime/external_deployments/*.ear /config/dropins/
+        component: oms-appserver
+  - name: Start Application Server
+    previewUrl:
+      port: 9080
+      path: /smcfs
+    actions:
+      - workdir: '${CHE_PROJECTS_ROOT}'
+        type: exec
+        command: /opt/ibm/wlp/bin/server run defaultServer
+        component: oms-appserver
+  - name: Stop Application Server
+    actions:
+      - workdir: '${CHE_PROJECTS_ROOT}'
+        type: exec
+        command: /opt/ibm/wlp/bin/server stop defaultServer
+        component: oms-appserver
+  - name: Launch Store Development Server
+    actions:
+      - workdir: '${CHE_PROJECTS_ROOT}/store-dev'
+        type: exec
+        command: ng serve --host 0.0.0.0 --disable-host-check
+        component: oms-runtime

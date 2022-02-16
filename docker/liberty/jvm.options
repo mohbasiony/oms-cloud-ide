@@ -1,0 +1,3 @@
+-Dvendor=shell
+-DvendorFile=servers.properties
+-Xms2048m
