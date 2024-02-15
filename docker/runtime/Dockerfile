@@ -1,4 +1,4 @@
-FROM om-base:10.0.0.26_20210921-1738 as base
+FROM om-base:10.0.2309.2_20240119-0651 as base
 ARG OLD_RT="/opt/SSFS_9.5/runtime"
 ARG RT_BASE="/projects"
 ARG NEW_RT="$RT_BASE/runtime"
