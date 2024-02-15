@@ -1,4 +1,4 @@
-FROM ibmoms/liberty-core:20.0.0.12
+FROM ibmoms/liberty-core:23.0.0.3
 
 COPY jvm.options /config/jvm.options
 COPY server.xml /config/server.xml
